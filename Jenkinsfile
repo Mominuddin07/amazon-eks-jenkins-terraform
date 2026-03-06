@@ -1,6 +1,12 @@
 pipeline {
     agent any
 
+    environment {
+        DOCKERHUB_USER = 'mominuddin0573'   // <-- change only this if needed
+        IMAGE_NAME     = 'petclinic-spinnaker-jenkins'
+        APP_IMAGE      = "${DOCKERHUB_USER}/${IMAGE_NAME}"
+    }
+
     stages {
         stage('Build Application') {
             steps {
@@ -23,8 +29,7 @@ pipeline {
             when { branch 'master' }
             steps {
                 script {
-                    def app = docker.build("mohammed123/petclinic-spinnaker-jenkins")
-                    env.APP_IMAGE = "mohammed123/petclinic-spinnaker-jenkins"
+                    docker.build(env.APP_IMAGE)
                 }
             }
         }
@@ -34,15 +39,13 @@ pipeline {
             steps {
                 script {
                     def GIT_COMMIT_HASH = sh(script: "git rev-parse HEAD", returnStdout: true).trim()
-                    def SHORT_COMMIT = GIT_COMMIT_HASH.take(8)
+                    env.SHORT_COMMIT = GIT_COMMIT_HASH.take(8)
 
                     docker.withRegistry('https://registry-1.docker.io', 'dockerHubCredentials') {
                         def app = docker.image(env.APP_IMAGE)
-                        app.push(SHORT_COMMIT)
+                        app.push(env.SHORT_COMMIT)
                         app.push("latest")
                     }
-
-                    env.SHORT_COMMIT = SHORT_COMMIT
                 }
             }
         }
@@ -50,8 +53,8 @@ pipeline {
         stage('Remove local images') {
             when { branch 'master' }
             steps {
-                sh "docker rmi -f mohammed123/petclinic-spinnaker-jenkins:latest || true"
-                sh "docker rmi -f mohammed123/petclinic-spinnaker-jenkins:${env.SHORT_COMMIT} || true"
+                sh "docker rmi -f ${env.APP_IMAGE}:latest || true"
+                sh "docker rmi -f ${env.APP_IMAGE}:${env.SHORT_COMMIT} || true"
             }
         }
     }
