@@ -1,22 +1,15 @@
 pipeline {
     agent any
 
-    triggers {
-        pollSCM "* * * * *"
-    }
-
     stages {
-
-        stage('Build Application') { 
+        stage('Build Application') {
             steps {
-                echo '=== Building Petclinic Application ==='
-                sh 'mvn -B -DskipTests clean package' 
+                sh 'mvn -B -DskipTests clean package'
             }
         }
 
         stage('Test Application') {
             steps {
-                echo '=== Testing Petclinic Application ==='
                 sh 'mvn test'
             }
             post {
@@ -29,9 +22,9 @@ pipeline {
         stage('Build Docker Image') {
             when { branch 'master' }
             steps {
-                echo '=== Building Petclinic Docker Image ==='
                 script {
                     def app = docker.build("mohammed123/petclinic-spinnaker-jenkins")
+                    env.APP_IMAGE = "mohammed123/petclinic-spinnaker-jenkins"
                 }
             }
         }
@@ -39,30 +32,26 @@ pipeline {
         stage('Push Docker Image') {
             when { branch 'master' }
             steps {
-                echo '=== Pushing Petclinic Docker Image ==='
                 script {
-                    def app = docker.image("mohammed123/petclinic-spinnaker-jenkins")
-
-                    def GIT_COMMIT_HASH = sh(
-                        script: "git rev-parse HEAD",
-                        returnStdout: true
-                    ).trim()
-
+                    def GIT_COMMIT_HASH = sh(script: "git rev-parse HEAD", returnStdout: true).trim()
                     def SHORT_COMMIT = GIT_COMMIT_HASH.take(8)
 
-                    docker.withRegistry('https://index.docker.io/v1/', 'dockerHubCredentials') {
+                    docker.withRegistry('https://registry-1.docker.io', 'dockerHubCredentials') {
+                        def app = docker.image(env.APP_IMAGE)
                         app.push(SHORT_COMMIT)
                         app.push("latest")
                     }
+
+                    env.SHORT_COMMIT = SHORT_COMMIT
                 }
             }
         }
 
         stage('Remove local images') {
+            when { branch 'master' }
             steps {
-                echo '=== Delete the local docker images ==='
                 sh "docker rmi -f mohammed123/petclinic-spinnaker-jenkins:latest || true"
-                sh "docker rmi -f mohammed123/petclinic-spinnaker-jenkins:* || true"
+                sh "docker rmi -f mohammed123/petclinic-spinnaker-jenkins:${env.SHORT_COMMIT} || true"
             }
         }
     }
